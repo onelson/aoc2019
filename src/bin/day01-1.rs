@@ -30,8 +30,47 @@
 //!
 //! What is the sum of the fuel requirements for all of the modules on your
 //! spacecraft?
-//!
+
+use std::io::{self, BufRead};
 
 fn main() {
-    unimplemented!();
+    let total = io::stdin()
+        .lock()
+        .lines()
+        .filter_map(|line| match line {
+            Ok(line) if line.as_str().trim() != "" => line.parse::<i32>().ok(),
+            _ => None,
+        })
+        .map(calc_required_fuel)
+        .fold(0, |acc, x| acc + x);
+
+    println!("{}", total);
+}
+
+fn calc_required_fuel(mass: i32) -> i32 {
+    mass / 3 - 2
+}
+
+#[cfg(test)]
+mod day01_tests {
+    use super::calc_required_fuel;
+    #[test]
+    fn test_mass_12_requires_2_fuel() {
+        assert_eq!(calc_required_fuel(12), 2);
+    }
+
+    #[test]
+    fn test_mass_14_requires_2_fuel() {
+        assert_eq!(calc_required_fuel(14), 2);
+    }
+
+    #[test]
+    fn test_mass_1969_requires_654_fuel() {
+        assert_eq!(calc_required_fuel(1969), 654);
+    }
+
+    #[test]
+    fn test_mass_100756_requires_33583_fuel() {
+        assert_eq!(calc_required_fuel(100756), 33583);
+    }
 }
