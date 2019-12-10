@@ -52,7 +52,7 @@ fn calc_required_fuel(mass: i32) -> i32 {
 }
 
 #[cfg(test)]
-mod day01_tests {
+mod day01_1_tests {
     use super::calc_required_fuel;
     #[test]
     fn test_mass_12_requires_2_fuel() {
