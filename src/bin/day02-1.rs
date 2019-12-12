@@ -97,9 +97,112 @@
 //! position `0` after the program halts?
 //!
 
+use std::io::Read;
+
 fn main() {
-    unimplemented!();
+    let mut input: Vec<i32> = {
+        let mut buf = String::new();
+        std::io::stdin().lock().read_to_string(&mut buf).unwrap();
+        buf.split(",")
+            .into_iter()
+            .filter_map(|s| s.trim().parse().ok())
+            .collect()
+    };
+
+    // adding the magic smoke...
+    input[1] = 12;
+    input[2] = 2;
+
+    let out = compute(input);
+    println!("{}", &out[0]);
+}
+
+#[derive(Debug)]
+enum Op {
+    Add { a: usize, b: usize, out: usize },
+    Multiply { a: usize, b: usize, out: usize },
+    Halt,
+    Unknown,
+}
+
+impl From<&[i32]> for Op {
+    fn from(chunk: &[i32]) -> Op {
+        match (
+            chunk.get(0).map(|x| *x as usize),
+            chunk.get(1).map(|x| *x as usize),
+            chunk.get(2).map(|x| *x as usize),
+            chunk.get(3).map(|x| *x as usize),
+        ) {
+            (Some(1), Some(a), Some(b), Some(out)) => Op::Add { a, b, out },
+            (Some(2), Some(a), Some(b), Some(out)) => Op::Multiply { a, b, out },
+            (Some(99), _, _, _) => Op::Halt,
+            _ => Op::Unknown,
+        }
+    }
+}
+
+fn get_args(a: usize, b: usize, data: &[i32]) -> (i32, i32) {
+    (data[a], data[b])
+}
+
+fn update(idx: usize, value: i32, data: &mut [i32]) {
+    data[idx] = value as i32
+}
+
+/// Builds an `Op` from `data` by reading up to 4 items from a given offset.
+fn read_instruction(offset: usize, data: &[i32]) -> Op {
+    let chunk: Vec<_> = data.iter().skip(offset).take(4).map(|x| *x).collect();
+    Op::from(chunk.as_slice())
+}
+
+fn compute(mut input: Vec<i32>) -> Vec<i32> {
+    let mut i = 0;
+    loop {
+        let op = read_instruction(i, &input);
+
+        match op {
+            Op::Halt => break,
+            Op::Add { a, b, out } => {
+                let (a, b) = get_args(a, b, &input);
+                update(out, a + b, &mut input);
+            }
+            Op::Multiply { a, b, out } => {
+                let (a, b) = get_args(a, b, &input);
+                update(out, a * b, &mut input);
+            }
+            _ => unreachable!(),
+        }
+        i += 4;
+    }
+    input
 }
 
 #[cfg(test)]
-mod day02_1_tests {}
+mod day02_1_tests {
+    use super::compute;
+
+    #[test]
+    fn test_example_1() {
+        let input = vec![1, 0, 0, 0, 99];
+        let out = compute(input);
+        assert_eq!(&out, &[2, 0, 0, 0, 99]);
+    }
+    #[test]
+    fn test_example_2() {
+        let input = vec![2, 3, 0, 3, 99];
+        let out = compute(input);
+        assert_eq!(&out, &[2, 3, 0, 6, 99]);
+    }
+    #[test]
+    fn test_example_3() {
+        let input = vec![2, 4, 4, 5, 99, 0];
+        let out = compute(input);
+        assert_eq!(&out, &[2, 4, 4, 5, 99, 9801]);
+    }
+    #[test]
+    fn test_example_4() {
+        let input = vec![1, 1, 1, 4, 99, 5, 6, 0, 99];
+        let out = compute(input);
+        assert_eq!(&out, &[30, 1, 1, 4, 2, 5, 6, 0, 99]);
+    }
+}
