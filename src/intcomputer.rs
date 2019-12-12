@@ -119,6 +119,7 @@ fn read_instruction(offset: usize, data: &[i32]) -> Op {
     }
 }
 
+/// Run an intcode program.
 pub fn compute(data: &mut [i32]) {
     let mut i = 0;
     loop {
@@ -134,6 +135,21 @@ pub fn compute(data: &mut [i32]) {
         }
         i += 4;
     }
+}
+
+/// Attempt to identify the noun and verb (injected header values) which will
+/// yield a certain target from a source intcode program by way of permutations.
+pub fn solve(target: i32, data: &[i32]) -> Result<(i32, i32), ()> {
+    for (noun, verb) in (0..=99).flat_map(|i| (0..=99).map(move |j| (i, j))) {
+        let mut input = data.to_vec();
+        input[1] = noun;
+        input[2] = verb;
+        compute(&mut input);
+        if input[0] == target {
+            return Ok((noun, verb));
+        }
+    }
+    Err(())
 }
 
 #[cfg(test)]
