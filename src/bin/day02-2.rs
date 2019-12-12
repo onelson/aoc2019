@@ -46,7 +46,7 @@
 //! 19690720. What is 100 * noun + verb? (For example, if noun=12 and verb=2,
 //! the answer would be 1202.)
 
-use aoc2019::intcomputer;
+use aoc2019::intcode;
 
 use std::io::Read;
 
@@ -60,7 +60,7 @@ fn main() {
             .collect()
     };
 
-    match intcomputer::solve(19690720, &mut input) {
+    match intcode::solve(19690720, &mut input) {
         Ok((noun, verb)) => {
             println!("noun={} verb={}", noun, verb);
             println!("{}", 100 * noun + verb);

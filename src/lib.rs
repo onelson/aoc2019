@@ -1,1 +1,1 @@
-pub mod intcomputer;
+pub mod intcode;

@@ -1,4 +1,4 @@
-use aoc2019::intcomputer;
+use aoc2019::intcode;
 
 use std::io::Read;
 
@@ -16,6 +16,6 @@ fn main() {
     input[1] = 12;
     input[2] = 2;
 
-    intcomputer::compute(&mut input);
+    intcode::compute(&mut input);
     println!("{}", &input[0]);
 }
