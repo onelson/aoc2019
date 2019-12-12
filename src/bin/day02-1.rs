@@ -95,7 +95,6 @@
 //! To do this, before running the program, replace position `1` with the value
 //! `12` and replace position `2` with the value `2`. What value is left at
 //! position `0` after the program halts?
-//!
 
 use std::io::Read;
 
@@ -113,8 +112,8 @@ fn main() {
     input[1] = 12;
     input[2] = 2;
 
-    let out = compute(input);
-    println!("{}", &out[0]);
+    compute(&mut input);
+    println!("{}", &input[0]);
 }
 
 #[derive(Debug)]
@@ -125,56 +124,36 @@ enum Op {
     Unknown,
 }
 
-impl From<&[i32]> for Op {
-    fn from(chunk: &[i32]) -> Op {
-        match (
-            chunk.get(0).map(|x| *x as usize),
-            chunk.get(1).map(|x| *x as usize),
-            chunk.get(2).map(|x| *x as usize),
-            chunk.get(3).map(|x| *x as usize),
-        ) {
-            (Some(1), Some(a), Some(b), Some(out)) => Op::Add { a, b, out },
-            (Some(2), Some(a), Some(b), Some(out)) => Op::Multiply { a, b, out },
-            (Some(99), _, _, _) => Op::Halt,
-            _ => Op::Unknown,
-        }
+/// Builds an `Op` from `data` by reading up to 4 items from a given offset.
+fn read_instruction(offset: usize, data: &[i32]) -> Op {
+    match (
+        data.get(offset).map(|x| *x as usize),
+        data.get(offset + 1).map(|x| *x as usize),
+        data.get(offset + 2).map(|x| *x as usize),
+        data.get(offset + 3).map(|x| *x as usize),
+    ) {
+        (Some(1), Some(a), Some(b), Some(out)) => Op::Add { a, b, out },
+        (Some(2), Some(a), Some(b), Some(out)) => Op::Multiply { a, b, out },
+        (Some(99), _, _, _) => Op::Halt,
+        _ => Op::Unknown,
     }
 }
 
-fn get_args(a: usize, b: usize, data: &[i32]) -> (i32, i32) {
-    (data[a], data[b])
-}
-
-fn update(idx: usize, value: i32, data: &mut [i32]) {
-    data[idx] = value as i32
-}
-
-/// Builds an `Op` from `data` by reading up to 4 items from a given offset.
-fn read_instruction(offset: usize, data: &[i32]) -> Op {
-    let chunk: Vec<_> = data.iter().skip(offset).take(4).map(|x| *x).collect();
-    Op::from(chunk.as_slice())
-}
-
-fn compute(mut input: Vec<i32>) -> Vec<i32> {
+fn compute(data: &mut [i32]) {
     let mut i = 0;
     loop {
-        let op = read_instruction(i, &input);
-
-        match op {
-            Op::Halt => break,
+        match read_instruction(i, &data) {
             Op::Add { a, b, out } => {
-                let (a, b) = get_args(a, b, &input);
-                update(out, a + b, &mut input);
+                data[out] = data[a] + data[b];
             }
             Op::Multiply { a, b, out } => {
-                let (a, b) = get_args(a, b, &input);
-                update(out, a * b, &mut input);
+                data[out] = data[a] * data[b];
             }
+            Op::Halt => break,
             _ => unreachable!(),
         }
         i += 4;
     }
-    input
 }
 
 #[cfg(test)]
@@ -183,26 +162,26 @@ mod day02_1_tests {
 
     #[test]
     fn test_example_1() {
-        let input = vec![1, 0, 0, 0, 99];
-        let out = compute(input);
-        assert_eq!(&out, &[2, 0, 0, 0, 99]);
+        let mut input = vec![1, 0, 0, 0, 99];
+        compute(&mut input);
+        assert_eq!(&input, &[2, 0, 0, 0, 99]);
     }
     #[test]
     fn test_example_2() {
-        let input = vec![2, 3, 0, 3, 99];
-        let out = compute(input);
-        assert_eq!(&out, &[2, 3, 0, 6, 99]);
+        let mut input = vec![2, 3, 0, 3, 99];
+        compute(&mut input);
+        assert_eq!(&input, &[2, 3, 0, 6, 99]);
     }
     #[test]
     fn test_example_3() {
-        let input = vec![2, 4, 4, 5, 99, 0];
-        let out = compute(input);
-        assert_eq!(&out, &[2, 4, 4, 5, 99, 9801]);
+        let mut input = vec![2, 4, 4, 5, 99, 0];
+        compute(&mut input);
+        assert_eq!(&input, &[2, 4, 4, 5, 99, 9801]);
     }
     #[test]
     fn test_example_4() {
-        let input = vec![1, 1, 1, 4, 99, 5, 6, 0, 99];
-        let out = compute(input);
-        assert_eq!(&out, &[30, 1, 1, 4, 2, 5, 6, 0, 99]);
+        let mut input = vec![1, 1, 1, 4, 99, 5, 6, 0, 99];
+        compute(&mut input);
+        assert_eq!(&input, &[30, 1, 1, 4, 2, 5, 6, 0, 99]);
     }
 }
