@@ -183,8 +183,6 @@ pub fn calc_fewest_steps(a: &[Step], b: &[Step]) -> Option<usize> {
 fn plot_course(directions: &[Step]) -> Vec<Point> {
     let mut buf: Vec<Point> = vec![];
     for step in directions {
-        // Eh, this is meant to be the last item in the last sub-vec, or `(0, 0)`
-        // if we're just starting from an empty `buf`.
         let &(x, y) = buf.iter().last().unwrap_or(&(0, 0));
 
         match step {
