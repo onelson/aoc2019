@@ -105,7 +105,7 @@
 //!
 //! What is the fewest combined steps the wires must take to reach an intersection?
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::iter::IntoIterator;
 use std::str::FromStr;
 
@@ -142,14 +142,8 @@ impl FromStr for Step {
 }
 
 pub fn calc_distance(a: &[Step], b: &[Step]) -> i32 {
-    let a: HashSet<_> = plot_course(a)
-        .into_iter()
-        .flat_map(|xs| xs.into_iter())
-        .collect();
-    let b: HashSet<_> = plot_course(b)
-        .into_iter()
-        .flat_map(|xs| xs.into_iter())
-        .collect();
+    let a: HashSet<_> = plot_course(a).into_iter().collect();
+    let b: HashSet<_> = plot_course(b).into_iter().collect();
 
     a.intersection(&b)
         .into_iter()
@@ -158,81 +152,46 @@ pub fn calc_distance(a: &[Step], b: &[Step]) -> i32 {
         .expect("min distance")
 }
 
-#[derive(Clone, Default)]
-struct PathWalk {
-    step_count: usize,
-    points: Vec<Vec<Point>>,
-    visited: HashSet<Point>,
-}
-
-impl PathWalk {
-    pub fn new(points: Vec<Vec<Point>>) -> Self {
-        Self {
-            points,
-            ..Default::default()
-        }
-    }
-
-    pub fn crosses(&self, other: &PathWalk) -> bool {
-        other.visited.intersection(&self.visited).count() > 0
-    }
-
-    // Creates a new PathWalk which moves the next pending step into the
-    // visited set.
-    pub fn next(&self) -> Option<PathWalk> {
-        self.points.split_first().map(|(head, tail)| {
-            let mut visited = self.visited.clone();
-            visited.extend(head);
-            let step_count = self.step_count + head.len();
-            Self {
-                points: tail.to_vec(),
-                step_count,
-                visited,
-            }
-        })
-    }
-}
-
-fn walk(a: PathWalk, b: PathWalk) -> Option<usize> {
-    if a.crosses(&b) {
-        return Some(a.step_count + b.step_count);
-    }
-    match (a.next(), b.next()) {
-        (None, None) => None,
-        (Some(next_a), None) => walk(next_a, b),
-        (None, Some(next_b)) => walk(a, next_b),
-        (Some(next_a), Some(next_b)) => {
-            let walked_a = walk(a, next_b);
-            let walked_b = walk(b, next_a);
-            [walked_a, walked_b].into_iter().filter_map(|x| *x).min()
-        }
-    }
-}
-
 pub fn calc_fewest_steps(a: &[Step], b: &[Step]) -> Option<usize> {
-    let walker_a = PathWalk::new(plot_course(a));
-    let walker_b = PathWalk::new(plot_course(b));
-    walk(walker_a, walker_b)
+    let mut a_map: HashMap<Point, usize> = HashMap::new();
+    let mut b_map: HashMap<Point, usize> = HashMap::new();
+    let mut a_set: HashSet<Point> = HashSet::new();
+    let mut b_set: HashSet<Point> = HashSet::new();
+    plot_course(a)
+        .into_iter()
+        .enumerate()
+        .for_each(|(idx, point)| {
+            let _ = a_map.entry(point).or_insert(idx + 1);
+            a_set.insert(point);
+        });
+
+    plot_course(b)
+        .into_iter()
+        .enumerate()
+        .for_each(|(idx, point)| {
+            let _ = b_map.entry(point).or_insert(idx + 1);
+            b_set.insert(point);
+        });
+
+    a_set
+        .intersection(&b_set)
+        .into_iter()
+        .map(|point| a_map[point] + b_map[point])
+        .min()
 }
 
-fn plot_course(directions: &[Step]) -> Vec<Vec<Point>> {
-    let mut buf: Vec<Vec<Point>> = vec![];
+fn plot_course(directions: &[Step]) -> Vec<Point> {
+    let mut buf: Vec<Point> = vec![];
     for step in directions {
         // Eh, this is meant to be the last item in the last sub-vec, or `(0, 0)`
         // if we're just starting from an empty `buf`.
-        let &(x, y) = buf
-            .iter()
-            .last()
-            .and_then(|x| x.iter().last())
-            .unwrap_or(&(0, 0));
+        let &(x, y) = buf.iter().last().unwrap_or(&(0, 0));
 
         match step {
-            &Step::Left(dist) => buf.push((1..=dist as usize).map(|i| (x - i as i32, y)).collect()),
-            &Step::Right(dist) => {
-                buf.push((1..=dist as usize).map(|i| (x + i as i32, y)).collect())
-            }
-            &Step::Up(dist) => buf.push((1..=dist as usize).map(|i| (x, y + i as i32)).collect()),
-            &Step::Down(dist) => buf.push((1..=dist as usize).map(|i| (x, y - i as i32)).collect()),
+            &Step::Left(dist) => buf.extend((1..=dist as usize).map(|i| (x - i as i32, y))),
+            &Step::Right(dist) => buf.extend((1..=dist as usize).map(|i| (x + i as i32, y))),
+            &Step::Up(dist) => buf.extend((1..=dist as usize).map(|i| (x, y + i as i32))),
+            &Step::Down(dist) => buf.extend((1..=dist as usize).map(|i| (x, y - i as i32))),
         };
     }
     buf
@@ -265,22 +224,19 @@ mod day03_1_test {
 
     #[test]
     fn test_plot_course() {
-        assert_eq!(
-            plot_course(&[Step::Right(2)]).as_slice(),
-            &[vec![(1, 0), (2, 0)]],
-        );
-        assert_eq!(plot_course(&[Step::Down(1)]).as_slice(), &[vec![(0, -1)]],);
+        assert_eq!(plot_course(&[Step::Right(2)]).as_slice(), &[(1, 0), (2, 0)],);
+        assert_eq!(plot_course(&[Step::Down(1)]).as_slice(), &[(0, -1)]);
         assert_eq!(
             plot_course(&[Step::Down(1), Step::Right(2)]).as_slice(),
-            &[vec![(0, -1),], vec![(1, -1), (2, -1)]],
+            &[(0, -1), (1, -1), (2, -1)],
         );
         assert_eq!(
             plot_course(&[Step::Left(2), Step::Up(3)]).as_slice(),
-            &[vec![(-1, 0), (-2, 0),], vec![(-2, 1), (-2, 2), (-2, 3)]],
+            &[(-1, 0), (-2, 0), (-2, 1), (-2, 2), (-2, 3)],
         );
         assert_eq!(
             plot_course(&[Step::Up(2), Step::Down(1)]).as_slice(),
-            &[vec![(0, 1), (0, 2),], vec![(0, 1)]],
+            &[(0, 1), (0, 2), (0, 1)],
         );
     }
 
@@ -303,7 +259,6 @@ mod day03_1_test {
 mod day03_2_test {
     use super::{build_steps, calc_fewest_steps};
 
-    #[ignore]
     #[test]
     fn test_example_1() {
         let input_a = build_steps("R75,D30,R83,U83,L12,D49,R71,U7,L72");
@@ -311,7 +266,6 @@ mod day03_2_test {
         assert_eq!(calc_fewest_steps(&input_a, &input_b), Some(610));
     }
 
-    #[ignore]
     #[test]
     fn test_example_2() {
         let input_a = build_steps("R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51");
