@@ -248,6 +248,49 @@
 //! After providing 1 to the only input instruction and passing all the tests,
 //! what diagnostic code does the program produce?
 
+use std::convert::TryFrom;
+use std::str::FromStr;
+
+#[derive(Debug, PartialEq)]
+struct OpHeader {
+    mode1: usize,
+    mode2: usize,
+    mode3: usize,
+    opcode: usize,
+}
+
+impl FromStr for OpHeader {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // initial string should not be larger than 5 or smaller than 1 chars.
+        if s.len() > 5 || s.len() < 1 {
+            return Err(());
+        }
+
+        let padded = format!("{:0>5}", s.chars().take(5).collect::<String>());
+        let (modes, opcode) = padded.split_at(3);
+
+        let modes: Vec<u32> = modes.chars().filter_map(|c| c.to_digit(10)).collect();
+        let opcode: usize = opcode.parse().map_err(|_| ())?;
+
+        Ok(OpHeader {
+            mode1: modes[0] as usize,
+            mode2: modes[1] as usize,
+            mode3: modes[2] as usize,
+            opcode,
+        })
+    }
+}
+
+impl TryFrom<i32> for OpHeader {
+    type Error = ();
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        value.to_string().parse()
+    }
+}
+
 #[derive(Debug)]
 enum Param {
     Immediate(i32),
@@ -268,23 +311,24 @@ enum Op {
 fn read_instruction(offset: usize, data: &[i32]) -> Op {
     // FIXME: check opcode to decide on param types
     // FIXME: add support for Input/Output
+    let header: Option<OpHeader> = data.get(offset).and_then(|x| OpHeader::try_from(*x).ok());
     match (
-        data.get(offset).map(|x| *x as usize),
+        header.as_ref(),
         data.get(offset + 1).map(|x| *x as usize),
         data.get(offset + 2).map(|x| *x as usize),
         data.get(offset + 3).map(|x| *x as usize),
     ) {
-        (Some(1), Some(a), Some(b), Some(out)) => Op::Add {
+        (Some(OpHeader { opcode: 1, .. }), Some(a), Some(b), Some(out)) => Op::Add {
             a: Param::Position(a),
             b: Param::Position(b),
             out,
         },
-        (Some(2), Some(a), Some(b), Some(out)) => Op::Multiply {
+        (Some(OpHeader { opcode: 2, .. }), Some(a), Some(b), Some(out)) => Op::Multiply {
             a: Param::Position(a),
             b: Param::Position(b),
             out,
         },
-        (Some(99), _, _, _) => Op::Halt,
+        (Some(OpHeader { opcode: 99, .. }), _, _, _) => Op::Halt,
         _ => Op::Unknown,
     }
 }
@@ -373,7 +417,34 @@ mod day02_1_tests {
 
 #[cfg(test)]
 mod day05_1_tests {
-    use super::compute;
+    use super::{compute, OpHeader};
+
+    #[test]
+    fn test_header_pad() {
+        // when the header is "short" it should be padded on the left with zeros
+        assert_eq!(
+            "102".parse::<OpHeader>().unwrap(),
+            OpHeader {
+                mode1: 0,
+                mode2: 0,
+                mode3: 1,
+                opcode: 2
+            }
+        );
+    }
+
+    #[test]
+    fn test_header_parse_two_digit_opcode() {
+        assert_eq!(
+            "1022".parse::<OpHeader>().unwrap(),
+            OpHeader {
+                mode1: 0,
+                mode2: 1,
+                mode3: 0,
+                opcode: 22
+            }
+        );
+    }
 
     #[test]
     fn test_example_1() {
