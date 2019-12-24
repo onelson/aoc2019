@@ -275,9 +275,9 @@ impl FromStr for OpHeader {
         let opcode: usize = opcode.parse().map_err(|_| ())?;
 
         Ok(OpHeader {
-            mode1: modes[0] as usize,
+            mode1: modes[2] as usize,
             mode2: modes[1] as usize,
-            mode3: modes[2] as usize,
+            mode3: modes[0] as usize,
             opcode,
         })
     }
@@ -297,11 +297,21 @@ enum Param {
     Position(usize),
 }
 
+impl Param {
+    pub fn from_pair((mode, value): (usize, i32)) -> Self {
+        match mode {
+            0 => Param::Position(value as usize),
+            1 => Param::Immediate(value),
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(Debug)]
 enum Op {
     Add { a: Param, b: Param, out: usize },
     Multiply { a: Param, b: Param, out: usize },
-    Input { value: Param },
+    Input { out: usize },
     Output { value: Param },
     Halt,
     Unknown,
@@ -309,61 +319,117 @@ enum Op {
 
 /// Builds an `Op` from `data` by reading up to 4 items from a given offset.
 fn read_instruction(offset: usize, data: &[i32]) -> Op {
-    // FIXME: check opcode to decide on param types
     // FIXME: add support for Input/Output
     let header: Option<OpHeader> = data.get(offset).and_then(|x| OpHeader::try_from(*x).ok());
     match (
-        header.as_ref(),
-        data.get(offset + 1).map(|x| *x as usize),
-        data.get(offset + 2).map(|x| *x as usize),
-        data.get(offset + 3).map(|x| *x as usize),
+        header,
+        data.get(offset + 1).map(|x| *x),
+        data.get(offset + 2).map(|x| *x),
+        data.get(offset + 3).map(|x| *x),
     ) {
-        (Some(OpHeader { opcode: 1, .. }), Some(a), Some(b), Some(out)) => Op::Add {
-            a: Param::Position(a),
-            b: Param::Position(b),
-            out,
+        (
+            Some(OpHeader {
+                opcode: 1,
+                mode1,
+                mode2,
+                mode3,
+            }),
+            Some(a),
+            Some(b),
+            Some(out),
+        ) => Op::Add {
+            a: Param::from_pair((mode1, a)),
+            b: Param::from_pair((mode2, b)),
+            out: match Param::from_pair((mode3, out)) {
+                Param::Position(out) => out,
+                _ => unreachable!("output params cannot be immediate"),
+            },
         },
-        (Some(OpHeader { opcode: 2, .. }), Some(a), Some(b), Some(out)) => Op::Multiply {
-            a: Param::Position(a),
-            b: Param::Position(b),
-            out,
+        (
+            Some(OpHeader {
+                opcode: 2,
+                mode1,
+                mode2,
+                mode3,
+            }),
+            Some(a),
+            Some(b),
+            Some(out),
+        ) => Op::Multiply {
+            a: Param::from_pair((mode1, a)),
+            b: Param::from_pair((mode2, b)),
+            out: match Param::from_pair((mode3, out)) {
+                Param::Position(out) => out,
+                _ => unreachable!("output params cannot be immediate"),
+            },
+        },
+        (Some(OpHeader { opcode: 3, .. }), Some(out), _, _) => Op::Input { out: out as usize },
+        (
+            Some(OpHeader {
+                opcode: 4, mode1, ..
+            }),
+            Some(value),
+            _,
+            _,
+        ) => Op::Output {
+            value: Param::from_pair((mode1, value)),
         },
         (Some(OpHeader { opcode: 99, .. }), _, _, _) => Op::Halt,
         _ => Op::Unknown,
     }
 }
 
+fn read_value(param: Param, data: &[i32]) -> Option<i32> {
+    match param {
+        Param::Position(idx) => data.get(idx).map(|x| *x),
+        Param::Immediate(val) => Some(val),
+    }
+}
+
+use std::io::BufRead;
+fn prompt_for_input() -> Result<i32, ()> {
+    let mut buf = String::new();
+    println!("Waiting for input... >");
+    std::io::stdin()
+        .lock()
+        .read_line(&mut buf)
+        .expect("input read");
+    buf.trim().parse().map_err(|e| {
+        eprintln!("{}", e);
+    })
+}
+
 /// Run an intcode program.
 pub fn compute(data: &mut [i32]) {
     let mut i = 0;
     loop {
+        // FIXME: make read_instruction an iterator so it can manage the increment internally
         match read_instruction(i, &data) {
             Op::Add { a, b, out } => {
-                let a = match a {
-                    Param::Position(idx) => data[idx],
-                    Param::Immediate(val) => val,
-                };
-                let b = match b {
-                    Param::Position(idx) => data[idx],
-                    Param::Immediate(val) => val,
-                };
+                let a = read_value(a, data).unwrap();
+                let b = read_value(b, data).unwrap();
                 data[out] = a + b;
+                i += 4;
             }
             Op::Multiply { a, b, out } => {
-                let a = match a {
-                    Param::Position(idx) => data[idx],
-                    Param::Immediate(val) => val,
-                };
-                let b = match b {
-                    Param::Position(idx) => data[idx],
-                    Param::Immediate(val) => val,
-                };
+                let a = read_value(a, data).unwrap();
+                let b = read_value(b, data).unwrap();
                 data[out] = a * b;
+                i += 4;
+            }
+            Op::Input { out } => {
+                let value = prompt_for_input().unwrap();
+                data[out] = value;
+                i += 2;
+            }
+            Op::Output { value } => {
+                let value = read_value(value, data).unwrap();
+                println!("offset={}, value={}", i, value);
+                i += 2;
             }
             Op::Halt => break,
             _ => unreachable!(),
         }
-        i += 4; // FIXME: increment based on Op length
     }
 }
 
@@ -425,9 +491,9 @@ mod day05_1_tests {
         assert_eq!(
             "102".parse::<OpHeader>().unwrap(),
             OpHeader {
-                mode1: 0,
+                mode1: 1,
                 mode2: 0,
-                mode3: 1,
+                mode3: 0,
                 opcode: 2
             }
         );
